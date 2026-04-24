@@ -61,126 +61,132 @@
     <footer>© 涵藝烘焙坊 Hanyi Bakery</footer>
 
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script>
-        // --- 1. 請填入你的資料 ---
-        const gasUrl = "https://script.google.com/macros/s/AKfycbxYiZBhrlNPmZFY6ulJ7fuFFT_HUj-bsGDmqhEk5s5pxGyVG41w4Wdpw0nL6w_Juk8iKw/exec"; 
-        const liffId = "2009881340-ZTY6HOWi"; 
+   <script>
+    // --- 1. 請填入你的資料 ---
+    const gasUrl = "https://script.google.com/macros/s/AKfycbxYiZBhrlNPmZFY6ulJ7fuFFT_HUj-bsGDmqhEk5s5pxGyVG41w4Wdpw0nL6w_Juk8iKw/exec"; 
+    const liffId = "2009881340-ZTY6HOWi"; 
 
-        liff.init({ liffId: liffId });
+    liff.init({ liffId: liffId });
 
-        function toggleAddress() {
-            const method = document.getElementById('deliveryMethod').value;
-            document.getElementById('addressArea').style.display = (method === '宅配到府') ? 'block' : 'none';
+    function toggleAddress() {
+        const method = document.getElementById('deliveryMethod').value;
+        document.getElementById('addressArea').style.display = (method === '宅配到府') ? 'block' : 'none';
+    }
+
+    // --- 2. 自動載入商品 ---
+    window.onload = function() {
+        fetch(gasUrl)
+        .then(res => res.json())
+        .then(products => {
+            const container = document.getElementById('menu-container');
+            container.innerHTML = ""; // 先清空，避免重複載入
+            products.forEach(p => {
+                if(!p[0]) return; 
+                if (p[1] === "" || isNaN(p[1])) {
+                    container.innerHTML += `<div class="category-title">${p[0]}</div>`;
+                } else {
+                    container.innerHTML += `
+                        <div class="item">
+                            <div class="item-info">
+                                <span class="item-name">${p[0]}</span>
+                                <span class="item-price">$${p[1]}</span>
+                            </div>
+                            <input type="number" class="order-qty" data-name="${p[0]}" data-price="${p[1]}" value="0" min="0">
+                        </div>`;
+                }
+            });
+            document.getElementById('submit-btn').style.display = "block";
+        })
+        .catch(err => {
+            console.error("載入商品失敗:", err);
+            alert("目前無法讀取選單，請確認網路連線！");
+        });
+    };
+
+    // --- 3. 送出訂單邏輯 ---
+    async function sendOrder() {
+        let lineName = "未知";
+        try {
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                lineName = profile.displayName;
+            }
+        } catch (err) { console.error(err); }
+
+        const contactName = document.getElementById('contactName').value;
+        const phone = document.getElementById('phone').value;
+        const delivery = document.getElementById('deliveryMethod').value;
+        const address = document.getElementById('address').value;
+        const note = document.getElementById('note').value; // 獲取備註
+
+        if (!contactName || !phone) return alert("請填寫姓名與電話喔！");
+        if (delivery === '宅配到府' && !address) return alert("選擇宅配需要填寫地址喔！");
+
+        const inputs = document.querySelectorAll('.order-qty');
+        let orderDetail = "";
+        let productTotal = 0;
+        let hasOrder = false;
+
+        inputs.forEach(input => {
+            let qty = parseInt(input.value);
+            if (qty > 0) {
+                orderDetail += `${input.getAttribute('data-name')} x${qty}; `;
+                productTotal += parseInt(input.getAttribute('data-price')) * qty;
+                hasOrder = true;
+            }
+        });
+
+        if (!hasOrder) return alert("請至少選購一項商品！");
+
+        let finalAmount = productTotal;
+        let shippingNote = "";
+        if (delivery === '宅配到府') {
+            finalAmount += 160;
+            shippingNote = " (含運$160)";
         }
 
-        // --- 2. 自動載入商品 ---
-        window.onload = function() {
-            fetch(gasUrl)
-            .then(res => res.json())
-            .then(products => {
-                const container = document.getElementById('menu-container');
-                products.forEach(p => {
-                    if(!p[0]) return; 
-                    if (p[1] === "" || isNaN(p[1])) {
-                        container.innerHTML += `<div class="category-title">${p[0]}</div>`;
-                    } else {
-                        container.innerHTML += `
-                            <div class="item">
-                                <div class="item-info">
-                                    <span class="item-name">${p[0]}</span>
-                                    <span class="item-price">$${p[1]}</span>
-                                </div>
-                                <input type="number" class="order-qty" data-name="${p[0]}" data-price="${p[1]}" value="0" min="0">
-                            </div>`;
-                    }
-                });
-                document.getElementById('submit-btn').style.display = "block";
-            });
-        };
+        const btn = document.getElementById('submit-btn');
+        btn.innerText = "傳送中...";
+        btn.disabled = true;
 
-       // --- 3. 送出訂單邏輯 ---
-        async function sendOrder() {
-            let lineName = "未知";
-            try {
-                if (liff.isLoggedIn()) {
-                    const profile = await liff.getProfile();
-                    lineName = profile.displayName;
-                }
-            } catch (err) { console.error(err); }
-
-            const contactName = document.getElementById('contactName').value;
-            const phone = document.getElementById('phone').value;
-            const delivery = document.getElementById('deliveryMethod').value;
-            const address = document.getElementById('address').value;
+        fetch(gasUrl, {
+            method: "POST",
+            mode: "no-cors",
+            body: JSON.stringify({ 
+                name: lineName, 
+                contactName: contactName, 
+                phone: phone,
+                delivery: delivery, 
+                address: (delivery === '店內自取' ? '' : address),
+                order: orderDetail + shippingNote, 
+                amount: finalAmount,
+                note: note // 傳送備註
+            })
+        }).then(() => {
+            let message = "🎉 涵藝烘焙坊收到您的訂單囉！\n\n";
+            message += "———————————————\n";
+            message += `👤 訂購人：${contactName}\n`;
+            message += `💰 商品小計：$${productTotal}\n`;
             
-            // 【新增】抓取備註欄位的數值
-            const note = document.getElementById('note').value;
-
-            if (!contactName || !phone) return alert("請填寫姓名與電話喔！");
-            if (delivery === '宅配到府' && !address) return alert("選擇宅配需要填寫地址喔！");
-
-            const inputs = document.querySelectorAll('.order-qty');
-            let orderDetail = "";
-            let productTotal = 0;
-            let hasOrder = false;
-
-            inputs.forEach(input => {
-                let qty = parseInt(input.value);
-                if (qty > 0) {
-                    orderDetail += `${input.getAttribute('data-name')} x${qty}; `;
-                    productTotal += parseInt(input.getAttribute('data-price')) * qty;
-                    hasOrder = true;
-                }
-            });
-
-            if (!hasOrder) return alert("請至少選購一項商品！");
-
-            let finalAmount = productTotal;
-            let shippingNote = "";
             if (delivery === '宅配到府') {
-                finalAmount += 160;
-                shippingNote = " (含運$160)";
+                message += "🚚 冷凍運費：$160\n";
+            } else {
+                message += "🏪 配送方式：店內自取\n";
             }
 
-            const btn = document.getElementById('submit-btn');
-            btn.innerText = "傳送中...";
-            btn.disabled = true;
+            if (note) {
+                message += `📝 備註：${note}\n`;
+            }
+            
+            message += "———————————————\n";
+            message += `✅ 應付總額：$${finalAmount} 元`;
 
-            // 【新增】在傳送給 GAS 的 JSON 物件中加入 note
-            fetch(gasUrl, {
-                method: "POST",
-                mode: "no-cors",
-                body: JSON.stringify({ 
-                    name: lineName, 
-                    contactName: contactName, 
-                    phone: phone,
-                    delivery: delivery, 
-                    address: (delivery === '店內自取' ? '' : address),
-                    order: orderDetail + shippingNote, 
-                    amount: finalAmount,
-                    note: note // <-- 這裡就是把備註傳出去的關鍵
-                })
-            }).then(() => {
-                let message = "🎉 涵藝烘焙坊收到您的訂單囉！\n\n";
-                message += "———————————————\n";
-                message += `👤 訂購人：${contactName}\n`;
-                message += `💰 商品小計：$${productTotal}\n`;
-                
-                if (delivery === '宅配到府') {
-                    message += "🚚 冷凍運費：$160\n";
-                } else {
-                    message += "🏪 配送方式：店內自取\n";
-                }
-
-                // 【新增】彈窗提示也顯示備註內容，讓客人確認
-                if (note) {
-                    message += `📝 備註：${note}\n`;
-                }
-                
-                message += "———————————————\n";
-                message += `✅ 應付總額：$${finalAmount} 元`;
-
-                alert(message);
-                liff.closeWindow();
-            });
-        }
+            alert(message);
+            liff.closeWindow();
+        }).catch(err => {
+            alert("送出失敗，請再試一次！");
+            btn.innerText = "確認送出訂單";
+            btn.disabled = false;
+        });
+    }
+</script>
