@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>涵藝烘焙坊今日手作選單</title>
+    <style>
+        :root { --main-brown: #8d6e63; --light-brown: #fcfaf7; --dark-text: #4a3728; }
+        body { font-family: -apple-system, sans-serif; padding: 20px; background-color: var(--light-brown); color: var(--dark-text); }
+        h2 { text-align: center; color: var(--main-brown); border-bottom: 2px solid #d7ccc8; padding-bottom: 15px; }
+        .user-info { background: white; padding: 15px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--main-brown); font-size: 14px; }
+        .input-group input, .input-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        .category-title { background: #d7ccc8; padding: 8px 12px; border-radius: 8px; margin: 20px 0 10px 0; font-weight: bold; color: #5d4037; }
+        .item { background: white; padding: 18px; margin-bottom: 12px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .order-btn { width: 100%; padding: 20px; font-size: 18px; font-weight: bold; background-color: var(--main-brown); color: white; border: none; border-radius: 15px; margin-top: 30px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>🥐 涵藝烘焙坊今日手作選單</h2>
+
+    <div class="user-info">
+        <div class="input-group">
+            <label>👤 訂購人姓名</label>
+            <input type="text" id="contactName" placeholder="您的真實姓名">
+        </div>
+        <div class="input-group">
+            <label>📞 聯絡電話</label>
+            <input type="tel" id="phone" placeholder="0912-345-678">
+        </div>
+        <div class="input-group">
+            <label>🚚 運送方式</label>
+            <select id="deliveryMethod" onchange="toggleAddress()">
+                <option value="店內自取">店內自取</option>
+                <option value="宅配到府">宅配到府</option>
+            </select>
+        </div>
+        <div class="input-group" id="addressArea" style="display:none;">
+            <label>📍 收件地址</label>
+            <input type="text" id="address" placeholder="請輸入完整配送地址">
+        </div>
+    </div>
+
+    <div id="menu-container"></div>
+    <button class="order-btn" onclick="sendOrder()" id="submit-btn" style="display:none;">確認送出訂單</button>
+
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+        const gasUrl = "https://script.google.com/macros/s/AKfycbxYiZBhrlNPmZFY6ulJ7fuFFT_HUj-bsGDmqhEk5s5pxGyVG41w4Wdpw0nL6w_Juk8iKw/exec"; 
+        const liffId = "2009881340-ZTY6HOWi"; 
+
+        liff.init({ liffId: liffId });
+
+        // 切換地址欄位顯示
+        function toggleAddress() {
+            const method = document.getElementById('deliveryMethod').value;
+            const addressArea = document.getElementById('addressArea');
+            addressArea.style.display = (method === '宅配到府') ? 'block' : 'none';
+        }
+
+        window.onload = function() {
+            fetch(gasUrl)
+            .then(res => res.json())
+            .then(products => {
+                const container = document.getElementById('menu-container');
+                products.forEach(p => {
+                    if(!p[0]) return; 
+                    if (p[1] === "" || isNaN(p[1])) {
+                        container.innerHTML += `<div class="category-title">${p[0]}</div>`;
+                    } else {
+                        container.innerHTML += `
+                            <div class="item">
+                                <div class="item-info">
+                                    <span class="item-name">${p[0]}</span><span class="item-price">$${p[1]}</span>
+                                </div>
+                                <input type="number" class="order-qty" data-name="${p[0]}" data-price="${p[1]}" value="0" min="0">
+                            </div>`;
+                    }
+                });
+                document.getElementById('submit-btn').style.display = "block";
+            });
+        };
+
+        async function sendOrder() {
+            let lineName = "未知";
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                lineName = profile.displayName;
+            }
+
+            const contactName = document.getElementById('contactName').value;
+            const phone = document.getElementById('phone').value;
+            const delivery = document.getElementById('deliveryMethod').value;
+            const address = document.getElementById('address').value;
+
+            // 必填檢查
+            if (!contactName || !phone) return alert("請填寫姓名與電話喔！");
+            if (delivery === '宅配到府' && !address) return alert("選擇宅配需要填寫地址喔！");
+
+            const inputs = document.querySelectorAll('.order-qty');
+            let orderDetail = "";
+            let totalAmount = 0;
+            let hasOrder = false;
+
+            inputs.forEach(input => {
+                let qty = parseInt(input.value);
+                if (qty > 0) {
+                    orderDetail += `${input.getAttribute('data-name')} x${qty}; `;
+                    totalAmount += parseInt(input.getAttribute('data-price')) * qty;
+                    hasOrder = true;
+                }
+            });
+
+            if (!hasOrder) return alert("請至少選購一項商品！");
+
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "傳送中...";
+            btn.disabled = true;
+
+            fetch(gasUrl, {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify({ 
+                    name: lineName, 
+                    contactName: contactName, 
+                    phone: phone,
+                    delivery: delivery, 
+                    address: address,
+                    order: orderDetail, 
+                    amount: totalAmount 
+                })
+            }).then(() => {
+                alert("訂單已送出！感謝您的購買。");
+                liff.closeWindow();
+            });
+        }
+    </script>
+</body>
+</html>
