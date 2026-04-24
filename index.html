@@ -61,11 +61,12 @@
     <footer>© 涵藝烘焙坊 Hanyi Bakery</footer>
 
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-   <script>
-    // --- 1. 請填入你的資料 ---
+  <script>
+    // --- 1. 資料設定 ---
     const gasUrl = "https://script.google.com/macros/s/AKfycbyzC3Vdv2T1H1r_2oigFUvD1C1lLSqZuaNC8g-QJrygvayAf5aSQaODbimMiDr0iVJXPQ/exec"; 
     const liffId = "2009881340-ZTY6HOWi"; 
 
+    // 初始化 LIFF
     liff.init({ liffId: liffId });
 
     function toggleAddress() {
@@ -73,13 +74,13 @@
         document.getElementById('addressArea').style.display = (method === '宅配到府') ? 'block' : 'none';
     }
 
-    // --- 2. 自動載入商品 ---
+    // --- 2. 自動載入商品 (確保這段能正常執行) ---
     window.onload = function() {
         fetch(gasUrl)
         .then(res => res.json())
         .then(products => {
             const container = document.getElementById('menu-container');
-            container.innerHTML = ""; // 先清空，避免重複載入
+            container.innerHTML = ""; 
             products.forEach(p => {
                 if(!p[0]) return; 
                 if (p[1] === "" || isNaN(p[1])) {
@@ -98,37 +99,30 @@
             document.getElementById('submit-btn').style.display = "block";
         })
         .catch(err => {
-            console.error("載入商品失敗:", err);
-            alert("目前無法讀取選單，請確認網路連線！");
+            console.error("商品載入失敗:", err);
+            alert("目前無法讀取選單，請檢查網路或確認 GAS 已發佈。");
         });
     };
 
-    // --- 3. 送出訂單邏輯 ---
-   async function sendOrder() {
-    let lineName = "未知";
-    
-    try {
-        // 確保 LIFF 已初始化
-        if (!liff.isLoggedIn()) {
-            // 如果沒登入，強制導向登入頁面
-            liff.login();
-            return; 
-        } else {
-            const profile = await liff.getProfile();
-            lineName = profile.displayName; // 這裡才會抓到暱稱
-        }
-    } catch (err) { 
-        console.error("LIFF Profile Error:", err); 
-    }
-
-    // ... 後面的 contactName, phone 等抓取邏輯不變 ...
-}
+    // --- 3. 送出訂單邏輯 (包含備註與暱稱) ---
+    async function sendOrder() {
+        let lineName = "未知";
+        try {
+            // 確保有登入並抓取暱稱
+            if (!liff.isLoggedIn()) {
+                liff.login();
+                return;
+            } else {
+                const profile = await liff.getProfile();
+                lineName = profile.displayName;
+            }
+        } catch (err) { console.error("抓取暱稱失敗", err); }
 
         const contactName = document.getElementById('contactName').value;
         const phone = document.getElementById('phone').value;
         const delivery = document.getElementById('deliveryMethod').value;
         const address = document.getElementById('address').value;
-        const note = document.getElementById('note').value; // 獲取備註
+        const note = document.getElementById('note').value; // 抓取備註
 
         if (!contactName || !phone) return alert("請填寫姓名與電話喔！");
         if (delivery === '宅配到府' && !address) return alert("選擇宅配需要填寫地址喔！");
@@ -150,16 +144,14 @@
         if (!hasOrder) return alert("請至少選購一項商品！");
 
         let finalAmount = productTotal;
-        let shippingNote = "";
-        if (delivery === '宅配到府') {
-            finalAmount += 160;
-            shippingNote = " (含運$160)";
-        }
+        let shippingNote = (delivery === '宅配到府') ? " (含運$160)" : "";
+        if (delivery === '宅配到府') finalAmount += 160;
 
         const btn = document.getElementById('submit-btn');
         btn.innerText = "傳送中...";
         btn.disabled = true;
 
+        // 傳送資料到 GAS
         fetch(gasUrl, {
             method: "POST",
             mode: "no-cors",
@@ -175,27 +167,15 @@
             })
         }).then(() => {
             let message = "🎉 涵藝烘焙坊收到您的訂單囉！\n\n";
-            message += "———————————————\n";
+            message += `👤 LINE暱稱：${lineName}\n`;
             message += `👤 訂購人：${contactName}\n`;
-            message += `💰 商品小計：$${productTotal}\n`;
-            
-            if (delivery === '宅配到府') {
-                message += "🚚 冷凍運費：$160\n";
-            } else {
-                message += "🏪 配送方式：店內自取\n";
-            }
-
-            if (note) {
-                message += `📝 備註：${note}\n`;
-            }
-            
-            message += "———————————————\n";
+            if (note) message += `📝 備註：${note}\n`;
             message += `✅ 應付總額：$${finalAmount} 元`;
 
             alert(message);
             liff.closeWindow();
         }).catch(err => {
-            alert("送出失敗，請再試一次！");
+            alert("送出失敗！");
             btn.innerText = "確認送出訂單";
             btn.disabled = false;
         });
