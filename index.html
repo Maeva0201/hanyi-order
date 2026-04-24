@@ -139,6 +139,7 @@
             const btn = document.getElementById('submit-btn');
             btn.innerText = "傳送中...";
             btn.disabled = true;
+// ...前面計算 finalAmount 的部分維持不變 ...
 
             fetch(gasUrl, {
                 method: "POST",
@@ -153,7 +154,22 @@
                     amount: finalAmount 
                 })
             }).then(() => {
-                alert(`涵藝烘焙坊收到訂單囉！\n商品小計：$${productTotal}\n應付總額：$${finalAmount}`);
+                // 這裡修改彈跳視窗的文字
+                let message = "🎉 涵藝烘焙坊收到您的訂單囉！\n\n";
+                message += "———————————————\n";
+                message += `👤 訂購人：${contactName}\n`;
+                message += `💰 商品小計：$${productTotal}\n`;
+                
+                if (delivery === '宅配到府') {
+                    message += "🚚 冷凍運費：$160\n";
+                } else {
+                    message += "🏪 配送方式：店內自取\n";
+                }
+                
+                message += "———————————————\n";
+                message += `✅ 應付總額：$${finalAmount} 元`;
+
+                alert(message);
                 liff.closeWindow();
             });
         }
