@@ -98,7 +98,7 @@
             });
         };
 
-        // --- 3. 送出訂單邏輯 ---
+       // --- 3. 送出訂單邏輯 ---
         async function sendOrder() {
             let lineName = "未知";
             try {
@@ -112,6 +112,9 @@
             const phone = document.getElementById('phone').value;
             const delivery = document.getElementById('deliveryMethod').value;
             const address = document.getElementById('address').value;
+            
+            // 【新增】抓取備註欄位的數值
+            const note = document.getElementById('note').value;
 
             if (!contactName || !phone) return alert("請填寫姓名與電話喔！");
             if (delivery === '宅配到府' && !address) return alert("選擇宅配需要填寫地址喔！");
@@ -132,7 +135,6 @@
 
             if (!hasOrder) return alert("請至少選購一項商品！");
 
-            // 運費與總額計算
             let finalAmount = productTotal;
             let shippingNote = "";
             if (delivery === '宅配到府') {
@@ -143,8 +145,8 @@
             const btn = document.getElementById('submit-btn');
             btn.innerText = "傳送中...";
             btn.disabled = true;
-// ...前面計算 finalAmount 的部分維持不變 ...
 
+            // 【新增】在傳送給 GAS 的 JSON 物件中加入 note
             fetch(gasUrl, {
                 method: "POST",
                 mode: "no-cors",
@@ -155,10 +157,10 @@
                     delivery: delivery, 
                     address: (delivery === '店內自取' ? '' : address),
                     order: orderDetail + shippingNote, 
-                    amount: finalAmount 
+                    amount: finalAmount,
+                    note: note // <-- 這裡就是把備註傳出去的關鍵
                 })
             }).then(() => {
-                // 這裡修改彈跳視窗的文字
                 let message = "🎉 涵藝烘焙坊收到您的訂單囉！\n\n";
                 message += "———————————————\n";
                 message += `👤 訂購人：${contactName}\n`;
@@ -169,6 +171,11 @@
                 } else {
                     message += "🏪 配送方式：店內自取\n";
                 }
+
+                // 【新增】彈窗提示也顯示備註內容，讓客人確認
+                if (note) {
+                    message += `📝 備註：${note}\n`;
+                }
                 
                 message += "———————————————\n";
                 message += `✅ 應付總額：$${finalAmount} 元`;
@@ -177,6 +184,3 @@
                 liff.closeWindow();
             });
         }
-    </script>
-</body>
-</html>
