@@ -104,14 +104,25 @@
     };
 
     // --- 3. 送出訂單邏輯 ---
-    async function sendOrder() {
-        let lineName = "未知";
-        try {
-            if (liff.isLoggedIn()) {
-                const profile = await liff.getProfile();
-                lineName = profile.displayName;
-            }
-        } catch (err) { console.error(err); }
+   async function sendOrder() {
+    let lineName = "未知";
+    
+    try {
+        // 確保 LIFF 已初始化
+        if (!liff.isLoggedIn()) {
+            // 如果沒登入，強制導向登入頁面
+            liff.login();
+            return; 
+        } else {
+            const profile = await liff.getProfile();
+            lineName = profile.displayName; // 這裡才會抓到暱稱
+        }
+    } catch (err) { 
+        console.error("LIFF Profile Error:", err); 
+    }
+
+    // ... 後面的 contactName, phone 等抓取邏輯不變 ...
+}
 
         const contactName = document.getElementById('contactName').value;
         const phone = document.getElementById('phone').value;
